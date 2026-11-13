@@ -135,11 +135,16 @@ export default async (req: Request) => {
       source: "Netlify AI Gateway (Gemini)",
       cached: false,
     });
-  } catch (_error) {
-    // Friendly un-cached fallback when GEMINI_API_KEY / AI Gateway is not yet linked locally
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const isFreeTierDirect = errMsg.includes("free_direct_disabled");
+
+    // Friendly un-cached fallback when GEMINI_API_KEY is not injected locally or Free-tier local direct access is disabled
     const fallbackPayload: FlashcardPayload = {
       topic,
-      explanation: `Netlify AI Gateway automatically injects GEMINI_API_KEY and gateway routing credentials once your project is linked via "netlify init" and deployed once (or when GEMINI_API_KEY is set locally). Until linked, here is an offline preview for "${topic}"—intentionally not cached in Netlify Blobs so live Gemini generation kicks in immediately once connected!`,
+      explanation: isFreeTierDirect
+        ? `Netlify AI Gateway injected your credentials, and in production on Netlify Functions it routes through Netlify's runtime—while local direct access requires a paid plan (or setting your own GEMINI_API_KEY locally). Here is a preview for "${topic}" (left un-cached so live AI responses take over automatically)!`
+        : `Netlify AI Gateway automatically injects GEMINI_API_KEY and gateway routing credentials once your project is linked via "netlify init" and deployed once (or when GEMINI_API_KEY is set locally). Until linked, here is an offline preview for "${topic}"—intentionally not cached in Netlify Blobs so live Gemini generation kicks in immediately once connected!`,
       codeExample: [
         `// Zero-config Gemini via Netlify AI Gateway`,
         `const ai = new GoogleGenAI({}); // Auto-uses injected GEMINI_API_KEY`,
@@ -153,7 +158,9 @@ export default async (req: Request) => {
 
     return Response.json({
       ...fallbackPayload,
-      source: "Netlify AI Gateway (Local Fallback — Unlinked)",
+      source: isFreeTierDirect
+        ? "Netlify AI Gateway (Free Tier — Open Production URL)"
+        : "Netlify AI Gateway (Local Fallback — Unlinked)",
       cached: false,
       isFallback: true,
     });
